@@ -1,0 +1,745 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RAG System - Document Q&A</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+        }
+
+        .container {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            border-radius: 20px;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+            max-width: 1200px;
+            width: 100%;
+            padding: 30px;
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 30px;
+        }
+
+        .section {
+            background: white;
+            border-radius: 15px;
+            padding: 25px;
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.08);
+            border: 1px solid rgba(0, 0, 0, 0.05);
+        }
+
+        .section h2 {
+            color: #4a5568;
+            margin-bottom: 20px;
+            font-size: 1.5rem;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .upload-area {
+            border: 2px dashed #cbd5e0;
+            border-radius: 10px;
+            padding: 40px 20px;
+            text-align: center;
+            transition: all 0.3s ease;
+            cursor: pointer;
+            margin-bottom: 20px;
+        }
+
+        .upload-area:hover {
+            border-color: #667eea;
+            background: rgba(102, 126, 234, 0.05);
+        }
+
+        .upload-area.dragover {
+            border-color: #667eea;
+            background: rgba(102, 126, 234, 0.1);
+        }
+
+        .upload-icon {
+            font-size: 3rem;
+            color: #a0aec0;
+            margin-bottom: 15px;
+        }
+
+        .file-input {
+            display: none;
+        }
+
+        .btn {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 1rem;
+            font-weight: 500;
+            transition: all 0.3s ease;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px rgba(102, 126, 234, 0.3);
+        }
+
+        .btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .progress-bar {
+            width: 100%;
+            height: 6px;
+            background: #e2e8f0;
+            border-radius: 3px;
+            margin: 15px 0;
+            overflow: hidden;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #667eea, #764ba2);
+            width: 0%;
+            transition: width 0.3s ease;
+        }
+
+        .query-input {
+            width: 100%;
+            padding: 15px;
+            border: 2px solid #e2e8f0;
+            border-radius: 10px;
+            font-size: 1rem;
+            margin-bottom: 15px;
+            transition: border-color 0.3s ease;
+        }
+
+        .query-input:focus {
+            outline: none;
+            border-color: #667eea;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        }
+
+        .results-container {
+            max-height: 400px;
+            overflow-y: auto;
+            margin-top: 20px;
+        }
+
+        .result-item {
+            background: #f7fafc;
+            border-radius: 8px;
+            padding: 15px;
+            margin-bottom: 15px;
+            border-left: 4px solid #667eea;
+        }
+
+        .result-answer {
+            font-weight: 500;
+            color: #2d3748;
+            margin-bottom: 10px;
+            line-height: 1.6;
+        }
+
+        .result-metadata {
+            display: flex;
+            gap: 15px;
+            flex-wrap: wrap;
+        }
+
+        .metadata-item {
+            background: #e2e8f0;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 0.8rem;
+            color: #4a5568;
+        }
+
+        .chunk-preview {
+            background: #edf2f7;
+            padding: 10px;
+            border-radius: 6px;
+            margin-top: 10px;
+            font-size: 0.9rem;
+            color: #4a5568;
+            border: 1px solid #e2e8f0;
+        }
+
+        .status {
+            padding: 10px 15px;
+            border-radius: 8px;
+            margin-bottom: 15px;
+            font-weight: 500;
+        }
+
+        .status.success {
+            background: #f0fff4;
+            color: #38a169;
+            border: 1px solid #9ae6b4;
+        }
+
+        .status.error {
+            background: #fed7d7;
+            color: #e53e3e;
+            border: 1px solid #feb2b2;
+        }
+
+        .status.processing {
+            background: #e6fffa;
+            color: #319795;
+            border: 1px solid #81e6d9;
+        }
+
+        .document-list {
+            max-height: 200px;
+            overflow-y: auto;
+        }
+
+        .document-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 10px;
+            border-radius: 6px;
+            margin-bottom: 8px;
+            background: #f7fafc;
+            border: 1px solid #e2e8f0;
+        }
+
+        .document-name {
+            font-weight: 500;
+            color: #2d3748;
+        }
+
+        .document-size {
+            font-size: 0.8rem;
+            color: #718096;
+        }
+
+        .loading {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 2px solid #e2e8f0;
+            border-top: 2px solid #667eea;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .settings-panel {
+            background: #f8f9fa;
+            border-radius: 8px;
+            padding: 15px;
+            margin-bottom: 20px;
+        }
+
+        .setting-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+
+        .setting-input {
+            width: 80px;
+            padding: 5px 8px;
+            border: 1px solid #e2e8f0;
+            border-radius: 4px;
+        }
+
+        @media (max-width: 768px) {
+            .container {
+                grid-template-columns: 1fr;
+                padding: 20px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- Document Processing Section -->
+        <div class="section">
+            <h2>📄 Document Processing</h2>
+            
+            <div class="settings-panel">
+                <h3 style="margin-bottom: 15px; font-size: 1.1rem;">Settings</h3>
+                <div class="setting-row">
+                    <label>Chunk Size:</label>
+                    <input type="number" id="chunkSize" class="setting-input" value="500" min="100" max="2000">
+                </div>
+                <div class="setting-row">
+                    <label>Overlap:</label>
+                    <input type="number" id="chunkOverlap" class="setting-input" value="50" min="0" max="500">
+                </div>
+                <div class="setting-row">
+                    <label>Top-K Results:</label>
+                    <input type="number" id="topK" class="setting-input" value="3" min="1" max="10">
+                </div>
+            </div>
+
+            <div class="upload-area" id="uploadArea">
+                <div class="upload-icon">📄</div>
+                <p><strong>Drop files here or click to upload</strong></p>
+                <p style="color: #718096; margin-top: 5px;">Supports: TXT, PDF, DOCX</p>
+            </div>
+            <input type="file" id="fileInput" class="file-input" multiple accept=".txt,.pdf,.docx">
+            
+            <div class="progress-bar" id="progressBar" style="display: none;">
+                <div class="progress-fill" id="progressFill"></div>
+            </div>
+            
+            <div id="documentStatus"></div>
+            
+            <div class="document-list" id="documentList"></div>
+            
+            <button class="btn" id="processBtn" disabled>
+                <span>🔄</span> Process Documents
+            </button>
+        </div>
+
+        <!-- Query & Results Section -->
+        <div class="section">
+            <h2>❓ Query & Results</h2>
+            
+            <input type="text" 
+                   class="query-input" 
+                   id="queryInput" 
+                   placeholder="Ask a question about your documents..."
+                   disabled>
+            
+            <button class="btn" id="searchBtn" disabled>
+                <span>🔍</span> Search
+            </button>
+            
+            <div id="searchStatus"></div>
+            
+            <div class="results-container" id="resultsContainer"></div>
+        </div>
+    </div>
+
+    <script>
+        class RAGSystem {
+            constructor() {
+                this.documents = [];
+                this.chunks = [];
+                this.embeddings = [];
+                this.vectorIndex = null;
+                this.setupEventListeners();
+            }
+
+            setupEventListeners() {
+                const uploadArea = document.getElementById('uploadArea');
+                const fileInput = document.getElementById('fileInput');
+                const processBtn = document.getElementById('processBtn');
+                const searchBtn = document.getElementById('searchBtn');
+                const queryInput = document.getElementById('queryInput');
+
+                // File upload handling
+                uploadArea.addEventListener('click', () => fileInput.click());
+                uploadArea.addEventListener('dragover', this.handleDragOver.bind(this));
+                uploadArea.addEventListener('drop', this.handleDrop.bind(this));
+                fileInput.addEventListener('change', this.handleFileSelect.bind(this));
+
+                // Processing and searching
+                processBtn.addEventListener('click', this.processDocuments.bind(this));
+                searchBtn.addEventListener('click', this.performSearch.bind(this));
+                queryInput.addEventListener('keypress', (e) => {
+                    if (e.key === 'Enter') this.performSearch();
+                });
+            }
+
+            handleDragOver(e) {
+                e.preventDefault();
+                e.target.closest('.upload-area').classList.add('dragover');
+            }
+
+            handleDrop(e) {
+                e.preventDefault();
+                e.target.closest('.upload-area').classList.remove('dragover');
+                this.addFiles(e.dataTransfer.files);
+            }
+
+            handleFileSelect(e) {
+                this.addFiles(e.target.files);
+            }
+
+            async addFiles(files) {
+                for (const file of files) {
+                    if (this.isValidFileType(file)) {
+                        const content = await this.readFileContent(file);
+                        this.documents.push({
+                            name: file.name,
+                            size: file.size,
+                            type: file.type,
+                            content: content
+                        });
+                    }
+                }
+                this.updateDocumentList();
+                document.getElementById('processBtn').disabled = this.documents.length === 0;
+            }
+
+            isValidFileType(file) {
+                const validTypes = ['text/plain', 'application/pdf'];
+                const validExtensions = ['.txt', '.pdf', '.docx'];
+                return validTypes.includes(file.type) || 
+                       validExtensions.some(ext => file.name.toLowerCase().endsWith(ext));
+            }
+
+            async readFileContent(file) {
+                return new Promise((resolve, reject) => {
+                    const reader = new FileReader();
+                    reader.onload = (e) => resolve(e.target.result);
+                    reader.onerror = reject;
+                    reader.readAsText(file);
+                });
+            }
+
+            updateDocumentList() {
+                const listContainer = document.getElementById('documentList');
+                listContainer.innerHTML = '';
+                
+                this.documents.forEach(doc => {
+                    const item = document.createElement('div');
+                    item.className = 'document-item';
+                    item.innerHTML = `
+                        <div>
+                            <div class="document-name">${doc.name}</div>
+                            <div class="document-size">${this.formatFileSize(doc.size)}</div>
+                        </div>
+                    `;
+                    listContainer.appendChild(item);
+                });
+            }
+
+            formatFileSize(bytes) {
+                const sizes = ['B', 'KB', 'MB', 'GB'];
+                if (bytes === 0) return '0 B';
+                const i = Math.floor(Math.log(bytes) / Math.log(1024));
+                return (bytes / Math.pow(1024, i)).toFixed(1) + ' ' + sizes[i];
+            }
+
+            async processDocuments() {
+                if (this.documents.length === 0) return;
+
+                this.showStatus('processing', 'Processing documents...');
+                this.showProgress(true);
+                
+                try {
+                    // Step 1: Text Chunking
+                    await this.updateProgress(20, 'Chunking documents...');
+                    this.chunks = await this.chunkDocuments();
+                    
+                    // Step 2: Generate Embeddings (Simulated)
+                    await this.updateProgress(60, 'Generating embeddings...');
+                    this.embeddings = await this.generateEmbeddings();
+                    
+                    // Step 3: Build Vector Index
+                    await this.updateProgress(90, 'Building vector index...');
+                    this.vectorIndex = this.buildVectorIndex();
+                    
+                    await this.updateProgress(100, 'Processing complete!');
+                    
+                    this.showStatus('success', `Successfully processed ${this.documents.length} documents into ${this.chunks.length} chunks`);
+                    
+                    // Enable search functionality
+                    document.getElementById('queryInput').disabled = false;
+                    document.getElementById('searchBtn').disabled = false;
+                    
+                } catch (error) {
+                    this.showStatus('error', 'Error processing documents: ' + error.message);
+                } finally {
+                    setTimeout(() => this.showProgress(false), 1000);
+                }
+            }
+
+            async chunkDocuments() {
+                const chunkSize = parseInt(document.getElementById('chunkSize').value);
+                const overlap = parseInt(document.getElementById('chunkOverlap').value);
+                const chunks = [];
+
+                this.documents.forEach((doc, docIndex) => {
+                    const text = doc.content;
+                    const docChunks = this.recursiveCharacterSplit(text, chunkSize, overlap);
+                    
+                    docChunks.forEach((chunk, chunkIndex) => {
+                        chunks.push({
+                            id: `${docIndex}_${chunkIndex}`,
+                            text: chunk,
+                            source: doc.name,
+                            docIndex: docIndex,
+                            chunkIndex: chunkIndex
+                        });
+                    });
+                });
+
+                return chunks;
+            }
+
+            recursiveCharacterSplit(text, chunkSize, overlap) {
+                const chunks = [];
+                const separators = ['\n\n', '\n', '. ', ' '];
+                
+                function splitRecursive(text, separatorIndex = 0) {
+                    if (text.length <= chunkSize) {
+                        chunks.push(text.trim());
+                        return;
+                    }
+                    
+                    if (separatorIndex >= separators.length) {
+                        // Force split if no good separator found
+                        chunks.push(text.substring(0, chunkSize).trim());
+                        splitRecursive(text.substring(chunkSize - overlap), 0);
+                        return;
+                    }
+                    
+                    const separator = separators[separatorIndex];
+                    const parts = text.split(separator);
+                    
+                    if (parts.length === 1) {
+                        splitRecursive(text, separatorIndex + 1);
+                        return;
+                    }
+                    
+                    let currentChunk = '';
+                    for (let i = 0; i < parts.length; i++) {
+                        const part = parts[i] + (i < parts.length - 1 ? separator : '');
+                        
+                        if ((currentChunk + part).length <= chunkSize) {
+                            currentChunk += part;
+                        } else {
+                            if (currentChunk.trim()) {
+                                chunks.push(currentChunk.trim());
+                            }
+                            currentChunk = part;
+                        }
+                    }
+                    
+                    if (currentChunk.trim()) {
+                        chunks.push(currentChunk.trim());
+                    }
+                }
+                
+                splitRecursive(text);
+                return chunks.filter(chunk => chunk.length > 0);
+            }
+
+            async generateEmbeddings() {
+                // Simulated embedding generation using simple text similarity
+                // In a real implementation, you would use sentence transformers or OpenAI embeddings
+                const embeddings = [];
+                
+                for (const chunk of this.chunks) {
+                    const embedding = this.generateSimpleEmbedding(chunk.text);
+                    embeddings.push({
+                        id: chunk.id,
+                        vector: embedding,
+                        metadata: {
+                            text: chunk.text,
+                            source: chunk.source,
+                            chunkIndex: chunk.chunkIndex
+                        }
+                    });
+                    
+                    // Simulate processing delay
+                    await new Promise(resolve => setTimeout(resolve, 10));
+                }
+                
+                return embeddings;
+            }
+
+            generateSimpleEmbedding(text) {
+                // Simple bag-of-words style embedding for demo purposes
+                // In production, use proper sentence transformers
+                const words = text.toLowerCase().match(/\b\w+\b/g) || [];
+                const wordCounts = {};
+                const vocabulary = new Set();
+                
+                // Build vocabulary from all chunks
+                this.chunks.forEach(chunk => {
+                    const chunkWords = chunk.text.toLowerCase().match(/\b\w+\b/g) || [];
+                    chunkWords.forEach(word => vocabulary.add(word));
+                });
+                
+                const vocabArray = Array.from(vocabulary).slice(0, 100); // Limit for demo
+                const vector = new Array(vocabArray.length).fill(0);
+                
+                words.forEach(word => {
+                    const index = vocabArray.indexOf(word);
+                    if (index !== -1) {
+                        vector[index] += 1;
+                    }
+                });
+                
+                // Normalize vector
+                const magnitude = Math.sqrt(vector.reduce((sum, val) => sum + val * val, 0));
+                return magnitude > 0 ? vector.map(val => val / magnitude) : vector;
+            }
+
+            buildVectorIndex() {
+                // Simple in-memory vector index
+                return {
+                    embeddings: this.embeddings,
+                    search: (queryEmbedding, k = 3) => {
+                        const scores = this.embeddings.map(embedding => ({
+                            ...embedding,
+                            score: this.cosineSimilarity(queryEmbedding, embedding.vector)
+                        }));
+                        
+                        return scores
+                            .sort((a, b) => b.score - a.score)
+                            .slice(0, k);
+                    }
+                };
+            }
+
+            cosineSimilarity(a, b) {
+                const dotProduct = a.reduce((sum, val, i) => sum + val * b[i], 0);
+                const magnitudeA = Math.sqrt(a.reduce((sum, val) => sum + val * val, 0));
+                const magnitudeB = Math.sqrt(b.reduce((sum, val) => sum + val * val, 0));
+                
+                if (magnitudeA === 0 || magnitudeB === 0) return 0;
+                return dotProduct / (magnitudeA * magnitudeB);
+            }
+
+            async performSearch() {
+                const query = document.getElementById('queryInput').value.trim();
+                if (!query || !this.vectorIndex) return;
+
+                this.showSearchStatus('processing', 'Searching...');
+                
+                try {
+                    // Generate query embedding
+                    const queryEmbedding = this.generateSimpleEmbedding(query);
+                    
+                    // Search vector index
+                    const topK = parseInt(document.getElementById('topK').value);
+                    const results = this.vectorIndex.search(queryEmbedding, topK);
+                    
+                    // Generate answer using retrieved context
+                    const answer = this.generateAnswer(query, results);
+                    
+                    this.displayResults(query, answer, results);
+                    this.showSearchStatus('success', `Found ${results.length} relevant chunks`);
+                    
+                } catch (error) {
+                    this.showSearchStatus('error', 'Search error: ' + error.message);
+                }
+            }
+
+            generateAnswer(query, results) {
+                // Simple answer generation based on most relevant chunks
+                // In production, you would use OpenAI GPT or similar LLM
+                
+                if (results.length === 0) {
+                    return "I couldn't find relevant information in the documents to answer your question.";
+                }
+                
+                const topResult = results[0];
+                const context = results.map(r => r.metadata.text).join(' ... ');
+                
+                // Simple keyword-based answer extraction
+                const queryWords = query.toLowerCase().split(' ');
+                const sentences = topResult.metadata.text.split(/[.!?]+/);
+                
+                let bestSentence = sentences[0];
+                let maxScore = 0;
+                
+                sentences.forEach(sentence => {
+                    const score = queryWords.reduce((acc, word) => {
+                        return acc + (sentence.toLowerCase().includes(word) ? 1 : 0);
+                    }, 0);
+                    
+                    if (score > maxScore) {
+                        maxScore = score;
+                        bestSentence = sentence;
+                    }
+                });
+                
+                return bestSentence.trim() + (bestSentence.endsWith('.') ? '' : '.');
+            }
+
+            displayResults(query, answer, results) {
+                const container = document.getElementById('resultsContainer');
+                
+                const resultHTML = `
+                    <div class="result-item">
+                        <div class="result-answer">${answer}</div>
+                        <div class="result-metadata">
+                            <span class="metadata-item">📊 Confidence: ${(results[0]?.score * 100 || 0).toFixed(1)}%</span>
+                            <span class="metadata-item">📄 Sources: ${new Set(results.map(r => r.metadata.source)).size}</span>
+                            <span class="metadata-item">🔍 Method: Vector Similarity</span>
+                        </div>
+                        
+                        ${results.map(result => `
+                            <div class="chunk-preview">
+                                <strong>📄 ${result.metadata.source}</strong> (Score: ${(result.score * 100).toFixed(1)}%)
+                                <br>
+                                ${result.metadata.text.substring(0, 200)}${result.metadata.text.length > 200 ? '...' : ''}
+                            </div>
+                        `).join('')}
+                    </div>
+                `;
+                
+                container.innerHTML = resultHTML;
+            }
+
+            showStatus(type, message) {
+                const statusDiv = document.getElementById('documentStatus');
+                statusDiv.className = `status ${type}`;
+                statusDiv.textContent = message;
+                statusDiv.style.display = 'block';
+            }
+
+            showSearchStatus(type, message) {
+                const statusDiv = document.getElementById('searchStatus');
+                statusDiv.className = `status ${type}`;
+                statusDiv.textContent = message;
+                statusDiv.style.display = 'block';
+            }
+
+            showProgress(show) {
+                document.getElementById('progressBar').style.display = show ? 'block' : 'none';
+                if (!show) {
+                    document.getElementById('progressFill').style.width = '0%';
+                }
+            }
+
+            async updateProgress(percent, message) {
+                document.getElementById('progressFill').style.width = percent + '%';
+                if (message) {
+                    this.showStatus('processing', message);
+                }
+                await new Promise(resolve => setTimeout(resolve, 500));
+            }
+        }
+
+        // Initialize the RAG System
+        const ragSystem = new RAGSystem();
+    </script>
+</body>
+</html>
